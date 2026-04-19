@@ -6,9 +6,7 @@ import { chunkText } from '../utils/textChunker.js';
 import fs from 'fs/promises';
 import mongoose from 'mongoose';
 
-// @desc    Upload PDF document
-// @route   POST /api/documents/upload
-// @access  Private
+
 export const uploadDocument = async (req, res, next) => {
   try {
     if (!req.file) {
@@ -22,7 +20,7 @@ export const uploadDocument = async (req, res, next) => {
     const { title } = req.body;
 
     if (!title) {
-      // Delete uploaded file if no title provided
+
       await fs.unlink(req.file.path);
       return res.status(400).json({
         success: false,
@@ -31,21 +29,21 @@ export const uploadDocument = async (req, res, next) => {
       });
     }
 
-    // Construct the URL for the uploaded file
+
     const baseUrl = `http://localhost:${process.env.PORT || 8000}`;
     const fileUrl = `${baseUrl}/uploads/documents/${req.file.filename}`;
 
-    // Create document record
+
     const document = await Document.create({
       userId: req.user._id,
       title,
       fileName: req.file.originalname,
-      filePath: fileUrl, // Store the URL instead of the local path
+      filePath: fileUrl,
       fileSize: req.file.size,
       status: 'processing'
     });
 
-    // Process PDF in background (in production, use a queue like Bull)
+
     processPDF(document._id, req.file.path).catch(err => {
       console.error('PDF processing error:', err);
     });
@@ -56,7 +54,7 @@ export const uploadDocument = async (req, res, next) => {
       message: 'Document uploaded successfully. Processing in progress...'
     });
   } catch (error) {
-    // Clean up file on error
+
     if (req.file) {
       await fs.unlink(req.file.path).catch(() => {});
     }
@@ -64,15 +62,15 @@ export const uploadDocument = async (req, res, next) => {
   }
 };
 
-// Helper function to process PDF
+
 const processPDF = async (documentId, filePath) => {
   try {
     const { text } = await extractTextFromPDF(filePath);
     
-    // Create chunks
+   
     const chunks = chunkText(text, 500, 50);
 
-    // Update document
+   
     await Document.findByIdAndUpdate(documentId, {
       extractedText: text,
       chunks: chunks,
@@ -89,9 +87,7 @@ const processPDF = async (documentId, filePath) => {
   }
 };
 
-// @desc    Get all user documents
-// @route   GET /api/documents
-// @access  Private
+
 export const getDocuments = async (req, res, next) => {
   try {
    const documents = await Document.aggregate([
@@ -143,9 +139,7 @@ export const getDocuments = async (req, res, next) => {
   }
 };
 
-// @desc    Get single document with chunks
-// @route   GET /api/documents/:id
-// @access  Private
+
 export const getDocument = async (req, res, next) => {
   try {
    const document = await Document.findOne({
@@ -161,15 +155,15 @@ export const getDocument = async (req, res, next) => {
       });
     }
 
-    // Get counts of associated flashcards and quizzes
+   
     const flashcardCount = await Flashcard.countDocuments({ documentId: document._id, userId: req.user._id });
     const quizCount = await Quiz.countDocuments({ documentId: document._id, userId: req.user._id });
 
-    // Update last accessed
+
     document.lastAccessed = Date.now();
     await document.save();
 
-    // Combine document data with counts
+
     const documentData = document.toObject();
     documentData.flashcardCount = flashcardCount;
     documentData.quizCount = quizCount;
@@ -183,9 +177,7 @@ export const getDocument = async (req, res, next) => {
   }
 };
 
-// @desc    Delete document
-// @route   DELETE /api/documents/:id
-// @access  Private
+
 export const deleteDocument = async (req, res, next) => {
   try {
    const document = await Document.findOne({
@@ -201,10 +193,10 @@ export const deleteDocument = async (req, res, next) => {
       });
     }
 
-    // Delete file from filesystem
+
     await fs.unlink(document.filePath).catch(() => {});
 
-    // Delete document
+
     await document.deleteOne();
 
     res.status(200).json({
