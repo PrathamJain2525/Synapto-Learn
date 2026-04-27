@@ -11,8 +11,9 @@ import AIActions from '../../components/ai/AIActions';
 import FlashcardManager from '../../components/flashcards/FlashcardManager';
 import QuizManager from '../../components/quizzes/QuizManager';
 
-const DocumentDetailPage = () => {
+const BACKEND_URL = 'https://synapto-learn-backend.onrender.com';
 
+const DocumentDetailPage = () => {
   const { id } = useParams();
   const [document, setDocument] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,70 +37,75 @@ const DocumentDetailPage = () => {
 
   const getPdfUrl = () => {
     if (!document?.data?.filePath) return null;
-    
+
     const filePath = document.data.filePath;
-    
+
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-      return filePath;
+      return filePath.replace(
+        'http://localhost:8000',
+        BACKEND_URL
+      );
     }
-    
-    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-    return `${baseUrl}${filePath.startsWith('/') ? '' : '/'}${filePath}`;
+
+    return `${BACKEND_URL}${filePath.startsWith('/') ? '' : '/'}${filePath}`;
   };
 
   const renderContent = () => {
     if (loading) {
-        return <Spinner />;
+      return <Spinner />;
     }
+
     if (!document || !document.data || !document.data.filePath) {
-        return <div className="text-center p-8">PDF not available.</div>;
+      return <div className="text-center p-8">PDF not available.</div>;
     }
 
     const pdfUrl = getPdfUrl();
 
     return (
-        <div className="bg-white border border-gray-300 rounded-lg overflow-hidden shadow-sm">
-            <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-300">
-                <span className="text-sm font-medium text-gray-700">Document Viewer</span>
-                <a 
-                    href={pdfUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
-                >
-                    <ExternalLink size={16} />
-                    Open in new tab
-                </a>
-            </div>
-            <div className="bg-gray-100 p-1">
-                <iframe
-                    src={pdfUrl}
-                    className="w-full h-[70vh] bg-white rounded border border-gray-300"
-                    title="PDF Viewer"
-                    frameBorder="0"
-                    style={{
-                        colorScheme: 'light',
-                    }}
-                />
-            </div>
+      <div className="bg-white border border-gray-300 rounded-lg overflow-hidden shadow-sm">
+        <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-300">
+          <span className="text-sm font-medium text-gray-700">
+            Document Viewer
+          </span>
+
+          <a
+            href={pdfUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+          >
+            <ExternalLink size={16} />
+            Open in new tab
+          </a>
         </div>
+
+        <div className="bg-gray-100 p-1">
+          <iframe
+            src={pdfUrl}
+            className="w-full h-[70vh] bg-white rounded border border-gray-300"
+            title="PDF Viewer"
+            frameBorder="0"
+            style={{ colorScheme: 'light' }}
+          />
+        </div>
+      </div>
     );
   };
 
   const renderChat = () => {
-    return <ChatInterface />
+    return <ChatInterface />;
   };
 
   const renderAIActions = () => {
-    return <AIActions />
+    return <AIActions />;
   };
 
   const renderFlashcardsTab = () => {
-    return <FlashcardManager documentId={id} />
+    return <FlashcardManager documentId={id} />;
   };
 
   const renderQuizzesTab = () => {
-    return <QuizManager documentId={id} />
+    return <QuizManager documentId={id} />;
   };
 
   const tabs = [
@@ -119,17 +125,22 @@ const DocumentDetailPage = () => {
   }
 
   return (
-     <div>
-        <div className="mb-4">
-            <Link to="/documents" className="inline-flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-900 transition-colors">
-                <ArrowLeft size={16} />
-                Back to Documents
-            </Link>
-        </div>
+    <div>
+      <div className="mb-4">
+        <Link
+          to="/documents"
+          className="inline-flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Back to Documents
+        </Link>
+      </div>
+
       <PageHeader title={document.data.title} />
+
       <Tabs tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
-  )
-}
+  );
+};
 
-export default DocumentDetailPage
+export default DocumentDetailPage;
