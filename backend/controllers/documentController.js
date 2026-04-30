@@ -5,7 +5,11 @@ import { extractTextFromPDF } from '../utils/pdfParser.js';
 import { chunkText } from '../utils/textChunker.js';
 import fs from 'fs/promises';
 import mongoose from 'mongoose';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const uploadDocument = async (req, res, next) => {
   try {
@@ -13,26 +17,28 @@ export const uploadDocument = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         error: 'Please upload a PDF file',
-        statusCode: 400
+        statusCode: 400,
       });
     }
 
     const { title } = req.body;
 
     if (!title) {
+      await fs.unlink(req.file.path).catch(() => {});
 
-      await fs.unlink(req.file.path);
       return res.status(400).json({
         success: false,
         error: 'Please provide a document title',
-        statusCode: 400
+        statusCode: 400,
       });
     }
 
+    const baseUrl =
+      process.env.NODE_ENV === 'production'
+        ? 'https://synapto-learn-backend.onrender.com'
+        : `http://localhost:${process.env.PORT || 8000}`;
 
-    const baseUrl = `http://localhost:${process.env.PORT || 8000}`;
     const fileUrl = `${baseUrl}/uploads/documents/${req.file.filename}`;
-
 
     const document = await Document.create({
       userId: req.user._id,
@@ -40,129 +46,127 @@ export const uploadDocument = async (req, res, next) => {
       fileName: req.file.originalname,
       filePath: fileUrl,
       fileSize: req.file.size,
-      status: 'processing'
+      status: 'processing',
     });
 
-
-    processPDF(document._id, req.file.path).catch(err => {
+    processPDF(document._id, req.file.path).catch((err) => {
       console.error('PDF processing error:', err);
     });
 
     res.status(201).json({
       success: true,
       data: document,
-      message: 'Document uploaded successfully. Processing in progress...'
+      message: 'Document uploaded successfully. Processing in progress...',
     });
   } catch (error) {
-
     if (req.file) {
       await fs.unlink(req.file.path).catch(() => {});
     }
+
     next(error);
   }
 };
 
-
 const processPDF = async (documentId, filePath) => {
   try {
     const { text } = await extractTextFromPDF(filePath);
-    
-   
+
     const chunks = chunkText(text, 500, 50);
 
-   
     await Document.findByIdAndUpdate(documentId, {
       extractedText: text,
-      chunks: chunks,
-      status: 'ready'
+      chunks,
+      status: 'ready',
     });
 
     console.log(`Document ${documentId} processed successfully`);
   } catch (error) {
     console.error(`Error processing document ${documentId}:`, error);
-    
+
     await Document.findByIdAndUpdate(documentId, {
-      status: 'failed'
+      status: 'failed',
     });
   }
 };
 
-
 export const getDocuments = async (req, res, next) => {
   try {
-   const documents = await Document.aggregate([
+    const documents = await Document.aggregate([
       {
-        $match: { userId: new mongoose.Types.ObjectId(req.user._id) }
+        $match: { userId: new mongoose.Types.ObjectId(req.user._id) },
       },
       {
         $lookup: {
           from: 'flashcards',
           localField: '_id',
           foreignField: 'documentId',
-          as: 'flashcardSets'
-        }
+          as: 'flashcardSets',
+        },
       },
       {
         $lookup: {
           from: 'quizzes',
           localField: '_id',
           foreignField: 'documentId',
-          as: 'quizzes'
-        }
+          as: 'quizzes',
+        },
       },
       {
         $addFields: {
           flashcardCount: { $size: '$flashcardSets' },
-          quizCount: { $size: '$quizzes' }
-        }
+          quizCount: { $size: '$quizzes' },
+        },
       },
       {
         $project: {
           extractedText: 0,
           chunks: 0,
           flashcardSets: 0,
-          quizzes: 0
-        }
+          quizzes: 0,
+        },
       },
       {
-        $sort: { uploadDate: -1 }
-      }
+        $sort: { uploadDate: -1 },
+      },
     ]);
 
     res.status(200).json({
       success: true,
       count: documents.length,
-      data: documents
+      data: documents,
     });
   } catch (error) {
     next(error);
   }
 };
 
-
 export const getDocument = async (req, res, next) => {
   try {
-   const document = await Document.findOne({
+    const document = await Document.findOne({
       _id: req.params.id,
-      userId: req.user._id
+      userId: req.user._id,
     });
 
     if (!document) {
       return res.status(404).json({
         success: false,
         error: 'Document not found',
-        statusCode: 404
+        statusCode: 404,
       });
     }
 
-   
-    const flashcardCount = await Flashcard.countDocuments({ documentId: document._id, userId: req.user._id });
-    const quizCount = await Quiz.countDocuments({ documentId: document._id, userId: req.user._id });
+    const flashcardCount = await Flashcard.countDocuments({
+      documentId: document._id,
+      userId: req.user._id,
+    });
 
+    const quizCount = await Quiz.countDocuments({
+      documentId: document._id,
+      userId: req.user._id,
+    });
 
     document.lastAccessed = Date.now();
     await document.save();
-
 
     const documentData = document.toObject();
     documentData.flashcardCount = flashcardCount;
@@ -170,38 +174,40 @@ export const getDocument = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: documentData
+      data: documentData,
     });
   } catch (error) {
     next(error);
   }
 };
 
-
 export const deleteDocument = async (req, res, next) => {
   try {
-   const document = await Document.findOne({
+    const document = await Document.findOne({
       _id: req.params.id,
-      userId: req.user._id
+      userId: req.user._id,
     });
 
     if (!document) {
       return res.status(404).json({
         success: false,
         error: 'Document not found',
-        statusCode: 404
+        statusCode: 404,
       });
     }
 
+    const fileName = document.filePath.split('/uploads/documents/')[1];
 
-    await fs.unlink(document.filePath).catch(() => {});
-
+    if (fileName) {
+      const localFilePath = path.join(__dirname, '../uploads/documents', fileName);
+      await fs.unlink(localFilePath).catch(() => {});
+    }
 
     await document.deleteOne();
 
     res.status(200).json({
       success: true,
-      message: 'Document deleted successfully'
+      message: 'Document deleted successfully',
     });
   } catch (error) {
     next(error);
